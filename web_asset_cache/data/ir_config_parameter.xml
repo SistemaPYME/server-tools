@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+    <record id="param_bundles" model="ir.config_parameter">
+        <field name="key">web_asset_cache.bundles</field>
+        <field
+            name="value"
+        >web.assets_web,web.assets_web_print,web.assets_frontend</field>
+    </record>
+</odoo>

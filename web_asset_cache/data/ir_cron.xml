@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+    <!-- Triggered each time Odoo loads the registry (every deploy); the daily
+         interval only catches up. -->
+    <record id="ir_cron_warm_bundles" model="ir.cron">
+        <field name="name">Web Asset Cache: build the asset bundles</field>
+        <field name="model_id" ref="model_web_asset_cache" />
+        <field name="state">code</field>
+        <field name="code">model._warm_bundles()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True" />
+    </record>
+</odoo>
