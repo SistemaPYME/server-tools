@@ -28,6 +28,12 @@ class TestAssetCookie(HttpCase):
         self.assertEqual(info["uid"], session.uid)
 
     def test_other_routes_still_set_the_cookie(self):
-        response = self.url_open("/web/login")
+        # A JSON route: /web/login would compile web.assets_frontend.
+        response = self.url_open(
+            "/web/webclient/version_info",
+            data="{}",
+            headers={"Content-Type": "application/json"},
+        )
 
+        self.assertEqual(response.status_code, 200)
         self.assertIn("session_id", response.headers.get("Set-Cookie", ""))
