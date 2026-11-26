@@ -1,0 +1,66 @@
+name: tag release
+
+# Clients pin only release tags 19.0-AAAA.MM.DD (pins.py in the workspace,
+# 01-TOOLS/pins). This makes them, on the commit of 19.0 that a full run tested
+# green: the run that scheduled-tests.yml dispatches at night (test.yml, or
+# pre-commit.yml in the repositories without tests), or, in the repositories
+# whose test.yml runs on every push to 19.0, that run. A second tag on the same
+# day gets .1, .2...; a commit that already has a release tag gets no other.
+on:
+  workflow_run:
+    workflows: [tests, pre-commit]
+    types: [completed]
+    branches: ["19.0"]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      contains(fromJSON('["workflow_dispatch", "push"]'), github.event.workflow_run.event)
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            // A push run counts only for test.yml (pre-commit is not a test).
+            // A dispatched run counts only for what scheduled-tests.yml
+            // dispatches: a manual dispatch of the same workflow tests the same.
+            let full = run.event === "push" && run.path.endsWith("/test.yml");
+            if (run.event === "workflow_dispatch") {
+              try {
+                const { data: file } = await github.rest.repos.getContent({
+                  ...context.repo, path: ".github/workflows/scheduled-tests.yml", ref: "19.0",
+                });
+                const nightly = Buffer.from(file.content, "base64").toString();
+                full = [...nightly.matchAll(/"([\w.-]+\.ya?ml)"/g)]
+                  .some((m) => run.path.endsWith(`/${m[1]}`));
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+            if (!full) {
+              core.info(`${run.event} run of ${run.path} is not a full test run`);
+              return;
+            }
+            const { data: refs } = await github.rest.git.listMatchingRefs({
+              ...context.repo, ref: "tags/19.0-",
+            });
+            if (refs.some((r) => r.object.sha === run.head_sha)) {
+              core.info(`${run.head_sha} already has a release tag`);
+              return;
+            }
+            const day = new Intl.DateTimeFormat("en-CA", {
+              timeZone: "America/Argentina/Buenos_Aires",
+            }).format(new Date()).replaceAll("-", ".");
+            const names = new Set(refs.map((r) => r.ref.replace("refs/tags/", "")));
+            let name = `19.0-${day}`;
+            for (let n = 1; names.has(name); n++) name = `19.0-${day}.${n}`;
+            await github.rest.git.createRef({
+              ...context.repo, ref: `refs/tags/${name}`, sha: run.head_sha,
+            });
+            core.notice(`Tagged ${run.head_sha} as ${name}`);
